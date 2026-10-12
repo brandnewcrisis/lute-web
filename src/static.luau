@@ -2,10 +2,10 @@
 --[[
 	Static file serving for ./public.
 
-	Files are read once and held in memory. The whole directory is a stylesheet
-	and a copy of htmx, so this costs nothing and removes disk I/O from every
-	page load -- but it does mean edits need a restart, which is the right
-	trade for a panel you leave running.
+	Files are read once and held in memory. A public directory is a
+	stylesheet and a few images, so this costs nothing and removes disk I/O
+	from every page load -- but it does mean edits need a restart, which is
+	the right trade for a server you leave running.
 ]]
 local fs = require("@lute/fs")
 local Response = require("@web/response")
@@ -75,8 +75,8 @@ function Static.serve(name: string): Response.T?
 	end
 	local response = Response.text(file.body)
 	response.headers["content-type"] = file.contentType
-	-- These are versioned by hand; a short cache keeps a reload from refetching
-	-- htmx without pinning a stale stylesheet for long.
+	-- These are versioned by hand; a short cache spares a reload the refetch
+	-- without pinning a stale stylesheet for long.
 	response.headers["cache-control"] = "public, max-age=300"
 	return response
 end

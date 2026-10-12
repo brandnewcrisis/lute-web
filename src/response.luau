@@ -3,14 +3,13 @@
 	Response construction.
 
 	Every response carries the same hardening headers. The CSP is strict
-	(`default-src 'self'`) and the panel is built to live inside it: htmx is
-	served from ./public rather than a CDN, and there are no inline scripts or
-	styles anywhere in the views.
+	(`default-src 'self'`): no inline scripts, no inline styles, nothing from
+	another origin. Live pages fit inside it, since their script is one file
+	served from here and their socket goes back to the same host.
 
 	Note the single-cookie constraint: Lute models response headers as a
-	string map, so a response can carry at most one Set-Cookie. That is why the
-	CSRF token travels inside the session payload instead of a cookie of its
-	own.
+	string map, so a response can carry at most one Set-Cookie. Keep anything
+	else you would have put in a cookie inside the session payload.
 ]]
 local Html = require("@web/html")
 local Json = require("@web/json")
@@ -26,10 +25,8 @@ export type T = {
 --[[
 	Headers added to every response.
 
-	Secure by default, and deliberately strict: a CSP of `default-src 'self'`
-	means inline scripts and styles do not run. htmx needs neither -- it is a
-	file you serve and a set of attributes -- so an htmx app can live inside
-	this policy where a typical SPA cannot. Call `configure` to loosen it.
+	Secure by default, and deliberately strict. Call `configure` to loosen
+	it, for instance to allow images from a CDN.
 ]]
 local SECURITY_HEADERS: { [string]: string } = {
 	["content-security-policy"] = "default-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -66,8 +63,9 @@ local function base(status: number, body: string, contentType: string): T
 	return { status = status, body = body, headers = headers }
 end
 
-function Response.html(node: Html.Node | string, status: number?): T
-	local markup = if type(node) == "string" then node else Html.render(node :: Html.Node)
+-- An HTML response from a node, a list of nodes, or markup already rendered.
+function Response.html(content: any, status: number?): T
+	local markup = if type(content) == "string" then content else Html.render(content)
 	return base(status or 200, markup, "text/html; charset=utf-8")
 end
 
@@ -95,12 +93,13 @@ function Response.withHeader(response: T, name: string, value: string): T
 	return response
 end
 
--- htmx honours this by navigating the whole page, which is what we want after
--- a session expires mid-action rather than swapping a login form into a table.
-function Response.hxRedirect(location: string): T
-	local response = base(200, "", "text/plain; charset=utf-8")
-	response.headers["hx-redirect"] = location
-	return response
+-- True for a table shaped like a response, as opposed to a node. Lets a
+-- page function answer with a redirect or a 404 instead of markup.
+function Response.is(value: any): boolean
+	return type(value) == "table"
+		and not Html.isNode(value)
+		and type(value.status) == "number"
+		and type(value.headers) == "table"
 end
 
 return Response

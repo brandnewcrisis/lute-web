@@ -5,6 +5,11 @@
 	Patterns look like "/servers/:jobId/players". A segment beginning with ":"
 	captures that segment into `params`. Matching is exact on segment count, so
 	"/servers/:id" never swallows "/servers/a/b".
+
+	A final "*" segment matches whatever is left, including nothing: "/app/*"
+	takes "/app" and everything under it, and the remainder is `params["*"]`.
+	A route without a wildcard always wins over one with, whichever was added
+	first, so a catch-all page cannot shadow "/login" or the static files.
 ]]
 local Response = require("@web/response")
 
@@ -17,7 +22,7 @@ export type Request = {
 	query: { [string]: string },
 	headers: { [string]: string },
 	params: { [string]: string },
-	-- filled in by the auth layer once the session is resolved
+	-- Yours to fill in from a `before` hook: the signed-in user, usually.
 	actor: any?,
 }
 
@@ -26,6 +31,7 @@ export type Handler = (Request) -> Response.T
 type Route = {
 	method: string,
 	segments: { string },
+	wildcard: boolean,
 	handler: Handler,
 }
 
@@ -42,15 +48,23 @@ function Router.new()
 	local self = {}
 
 	function self.add(method: string, pattern: string, handler: Handler)
+		local segments = split(pattern)
+		local wildcard = segments[#segments] == "*"
+		if wildcard then
+			table.remove(segments)
+		end
 		table.insert(routes, {
 			method = method:upper(),
-			segments = split(pattern),
+			segments = segments,
+			wildcard = wildcard,
 			handler = handler,
 		})
 	end
 
 	function self.get(pattern: string, handler: Handler) self.add("GET", pattern, handler) end
 	function self.post(pattern: string, handler: Handler) self.add("POST", pattern, handler) end
+	function self.put(pattern: string, handler: Handler) self.add("PUT", pattern, handler) end
+	function self.patch(pattern: string, handler: Handler) self.add("PATCH", pattern, handler) end
 	function self.delete(pattern: string, handler: Handler) self.add("DELETE", pattern, handler) end
 
 	--[[
@@ -61,9 +75,18 @@ function Router.new()
 	]]
 	function self.resolve(method: string, path: string): (Handler?, { [string]: string }, boolean)
 		local wanted = split(path)
+		local verb = method:upper()
 		local pathMatched = false
+		-- The best wildcard seen so far: the one with the longest fixed part.
+		local fallback: Route? = nil
+		local fallbackParams: { [string]: string } = {}
+
 		for _, route in routes do
-			if #route.segments ~= #wanted then
+			if route.wildcard then
+				if #wanted < #route.segments then
+					continue
+				end
+			elseif #route.segments ~= #wanted then
 				continue
 			end
 			local params: { [string]: string } = {}
@@ -76,12 +99,24 @@ function Router.new()
 					break
 				end
 			end
-			if matched then
-				pathMatched = true
-				if route.method == method:upper() then
-					return route.handler, params, true
-				end
+			if not matched then
+				continue
 			end
+			pathMatched = true
+			if route.method ~= verb then
+				continue
+			end
+			if not route.wildcard then
+				return route.handler, params, true
+			end
+			if fallback == nil or #route.segments > #fallback.segments then
+				params["*"] = table.concat(wanted, "/", #route.segments + 1)
+				fallback, fallbackParams = route, params
+			end
+		end
+
+		if fallback then
+			return fallback.handler, fallbackParams, true
 		end
 		return nil, {}, pathMatched
 	end

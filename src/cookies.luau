@@ -11,7 +11,7 @@ function Cookies.parse(header: string?): { [string]: string }
 	for pair in header:gmatch("[^;]+") do
 		local name, value = pair:match("^%s*([^=%s]+)%s*=%s*(.*)%s*$")
 		if name then
-			out[name] = (value:gsub("%s+$", ""))
+			out[name] = ((value :: string):gsub("%s+$", ""))
 		end
 	end
 	return out
@@ -34,7 +34,7 @@ export type Options = {
 	and bounce the user straight back to the login page.
 ]]
 function Cookies.serialize(name: string, value: string, options: Options?): string
-	local opts = options or {}
+	local opts: Options = options or {}
 	local parts = { `{name}={value}` }
 	table.insert(parts, "Path=" .. (opts.path or "/"))
 	table.insert(parts, "HttpOnly")

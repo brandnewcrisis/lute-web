@@ -73,7 +73,7 @@ for index = 1, #B64URL do
 end
 
 function Bytes.fromBase64Url(text: string): buffer?
-	local values = table.create(#text)
+	local values: { number } = {}
 	for index = 1, #text do
 		local value = B64URL_INV[text:sub(index, index)]
 		if value == nil then
@@ -92,8 +92,8 @@ function Bytes.fromBase64Url(text: string): buffer?
 	local i = 1
 	while i <= count do
 		local remaining = count - i + 1
-		local v1, v2 = values[i], values[i + 1] or 0
-		local v3, v4 = values[i + 2] or 0, values[i + 3] or 0
+		local v1: number, v2: number = values[i], values[i + 1] or 0
+		local v3: number, v4: number = values[i + 2] or 0, values[i + 3] or 0
 		local n = bit32.bor(bit32.lshift(v1, 18), bit32.lshift(v2, 12), bit32.lshift(v3, 6), v4)
 		buffer.writeu8(buf, pos, bit32.band(bit32.rshift(n, 16), 255))
 		if remaining > 2 then

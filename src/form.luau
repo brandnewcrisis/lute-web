@@ -2,9 +2,10 @@
 --[[
 	Parsing request bodies and query strings.
 
-	application/x-www-form-urlencoded is what a plain HTML form sends and what
-	htmx sends by default, so it is the body format a server like this deals
-	with most. Nothing here decodes multipart -- file uploads want streaming,
+	application/x-www-form-urlencoded is what a plain HTML form sends, so it
+	is the body format a server like this deals with most. A form on a live
+	page does not come through here at all: its fields arrive already parsed
+	as `event.form`. Nothing here decodes multipart -- file uploads want streaming,
 	which Lute's server does not expose.
 ]]
 local Form = {}
@@ -38,7 +39,7 @@ function Form.parse(body: string): { [string]: string }
 	for pair in body:gmatch("[^&]+") do
 		local key, value = pair:match("^([^=]*)=(.*)$")
 		if key ~= nil and key ~= "" then
-			out[decodeComponent(key)] = decodeComponent(value)
+			out[decodeComponent(key)] = decodeComponent(value :: string)
 		elseif pair ~= "" then
 			out[decodeComponent(pair)] = "" -- a name with no "="
 		end
@@ -55,7 +56,7 @@ function Form.parseMulti(body: string): { [string]: { string } }
 			if out[name] == nil then
 				out[name] = {}
 			end
-			table.insert(out[name], decodeComponent(value))
+			table.insert(out[name], decodeComponent(value :: string))
 		end
 	end
 	return out
